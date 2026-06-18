@@ -1,0 +1,44 @@
+name: Destroy EC2
+
+on:
+  workflow_dispatch:
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      # Guardamos el resultado de la validación en una variable del sistema
+      - name: Check if stack exists
+        id: check_stack
+        run: |
+          if aws cloudformation describe-stacks --stack-name ec2-stack-clase >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "El stack existe. Procediendo a eliminar..."
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "El stack NO existe. Se omitirá el borrado."
+          fi
+
+      # Este paso solo corre si el stack realmente existe
+      - name: Delete CloudFormation Stack
+        if: steps.check_stack.outputs.exists == 'true'
+        run: |
+          aws cloudformation delete-stack --stack-name ec2-stack-clase
+
+      # Este paso también se adapta dinámicamente
+      - name: Wait for deletion
+        if: steps.check_stack.outputs.exists == 'true'
+        run: |
+          echo "Esperando que AWS libere los recursos..."
+          aws cloudformation wait stack-delete-complete --stack-name ec2-stack-clase
+
+      - name: Done
+        run: echo "Proceso de destrucción finalizado con éxito."
